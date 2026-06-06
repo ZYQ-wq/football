@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
+    <title>Tactician · 战术推演 | AI足球战术大师</title>
+    <!-- TailwindCSS + 基础字体 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- html2canvas 截图库 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        /* 自定义加载动画与微交互 */
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 0.5; }
+            100% { transform: scale(1.4); opacity: 0; }
+        }
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(59,130,246,0.2);
+            border-top-color: #3b82f6;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .tactic-btn.active {
+            background-color: #1e3a8a;
+            color: white;
+            border-color: #1e3a8a;
+        }
+        .formation-btn.active {
+            background-color: #059669;
+            color: white;
+            border-color: #059669;
+        }
+        .transition-smooth {
+            transition: all 0.2s ease;
+        }
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #1f2937; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 10px; }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-gray-200 font-sans antialiased">
+
+    <div id="app" class="max-w-5xl mx-auto px-4 py-6 md:py-10">
+        <!-- 头部 -->
+        <div class="text-center mb-8">
+            <h1 class="text-4xl md:text-5xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400">⚽ Tactician</h1>
+            <p class="text-gray-400 mt-2 text-sm md:text-base">AI 战术推演 · 模拟世界杯对决 · 仅供战术娱乐</p>
+            <div class="w-24 h-1 bg-blue-500/50 mx-auto mt-3 rounded-full"></div>
+        </div>
+
+        <!-- 双球队卡片区 -->
+        <div class="grid md:grid-cols-2 gap-6 mb-8">
+            <!-- 主队 -->
+            <div class="bg-slate-800/60 backdrop-blur-sm rounded-2xl p-5 border border-slate-700 shadow-xl">
+                <div class="flex items-center gap-2 mb-3">
+                    <span class="text-blue-400 text-xl">🏠</span>
+                    <h2 class="text-xl font-bold">主队</h2>
+                </div>
+                <select id="homeTeamSelect" class="w-full bg-slate-900 border border-slate-600 rounded-xl p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none">
+                    <!-- 动态js填充 -->
+                </select>
+                <div class="mt-4">
+                    <label class="block text-sm text-gray-300 mb-1">⭐ 重点关注球员</label>
+                    <select id="homeStarSelect" class="w-full bg-slate-900 border border-slate-600 rounded-xl p-2 text-white">
+                        <option>-- 选择核心球员 --</option>
+                    </select>
+                </div>
+            </div>
+            <!-- 客队 -->
+            <div class="bg-slate-800/60 backdrop-blur-sm rounded-2xl p-5 border border-slate-700 shadow-xl">
+                <div class="flex items-center gap-2 mb-3">
+                    <span class="text-emerald-400 text-xl">✈️</span>
+                    <h2 class="text-xl font-bold">客队</h2>
+                </div>
+                <select id="awayTeamSelect" class="w-full bg-slate-900 border border-slate-600 rounded-xl p-3 text-white focus:ring-2 focus:ring-emerald-500 outline-none">
+                </select>
+                <div class="mt-4">
+                    <label class="block text-sm text-gray-300 mb-1">⭐ 重点关注球员</label>
+                    <select id="awayStarSelect" class="w-full bg-slate-900 border border-slate-600 rounded-xl p-2 text-white">
+                        <option>-- 选择核心球员 --</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- 战术设置区 (阵型 + 战术指令) -->
+        <div class="bg-slate-800/40 rounded-2xl p-5 border border-slate-700 mb-8">
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <h3 class="text-lg font-semibold flex items-center gap-2"><span class="text-yellow-400">🛡️</span> 战术板设置</h3>
+                <span class="text-xs text-gray-400 bg-slate-700 px-2 py-1 rounded-full">战术指令最多选3项</span>
+            </div>
+            <!-- 阵型选择 -->
+            <div class="mb-5">
+                <label class="block text-sm text-gray-300 mb-2">📐 阵型体系</label>
+                <div id="formationGroup" class="flex flex-wrap gap-2">
+                    <!-- 动态按钮组 -->
+                </div>
+            </div>
+            <!-- 战术指令多选 -->
+            <div>
+                <label class="block text-sm text-gray-300 mb-2">⚡ 战术指令 (多选)</label>
+                <div id="tacticsGroup" class="flex flex-wrap gap-2">
+                    <!-- 动态按钮组 -->
+                </div>
+                <p id="tacticWarning" class="text-amber-400 text-xs mt-2 hidden">⚠️ 最多只能选择3个战术指令</p>
+            </div>
+        </div>
+
+        <!-- 推演按钮 + 加载区 -->
+        <div class="flex justify-center mb-10">
+            <button id="simulateBtn" class="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold py-4 px-10 rounded-2xl shadow-lg transition-all duration-200 transform hover:scale-105 flex items-center gap-2 text-lg">
+                🧠 开始战术推演
+            </button>
+        </div>
+
+        <!-- 结果展示区 (截图容器) -->
+        <div id="resultContainer" class="bg-slate-900/60 rounded-2xl border border-slate-700 backdrop-blur-sm p-5 md:p-6 transition-all">
+            <div class="flex justify-between items-center flex-wrap gap-2 mb-4 border-b border-slate-700 pb-2">
+                <h3 class="text-xl font-bold flex items-center gap-2">📊 推演报告</h3>
+                <button id="shareBtn" class="bg-slate-700 hover:bg-slate-600 text-sm px-4 py-1.5 rounded-full transition flex items-center gap-1">📸 保存为图片</button>
+            </div>
+            <!-- 推演结果占位 -->
+            <div id="resultContent" class="space-y-5 text-gray-300">
+                <div class="text-center py-10 text-gray-500 flex flex-col items-center gap-2">
+                    <span class="text-5xl">⚙️</span>
+                    <p>选择球队与战术，点击「开始战术推演」</p>
+                    <p class="text-xs">AI将基于历史风格生成模拟分析</p>
+                </div>
+            </div>
+            <div class="mt-6 text-center text-xs text-gray-500 border-t border-slate-800 pt-4">
+                ⚠️ 郑重声明：本推演由AI模型基于历史数据模拟生成，仅供战术学习与娱乐参考，不代表实际比赛结果，严禁用于任何非法赌博活动。
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ----------------------------- 1. 内置球队数据 (MVP 12支代表性球队) -----------------------------
+        const teamsData = {
+            "Brazil": { country: "巴西", style: "桑巴技术流，进攻天赋爆炸", starPlayers: ["内马尔", "维尼修斯", "罗德里戈", "拉菲尼亚"], defaultFormation: "4-3-3" },
+            "France": { country: "法国", style: "顶级冲击力，快速反击", starPlayers: ["姆巴佩", "格列兹曼", "琼阿梅尼", "科曼"], defaultFormation: "4-2-3-1" },
+            "Argentina": { country: "阿根廷", style: "传控依赖梅西，斗志坚韧", starPlayers: ["梅西", "迪马利亚", "恩佐·费尔南德斯", "阿尔瓦雷斯"], defaultFormation: "4-3-3" },
+            "Germany": { country: "德国", style: "高位压迫，整体跑动强", starPlayers: ["穆西亚拉", "基米希", "哈弗茨", "萨内"], defaultFormation: "4-2-3-1" },
+            "England": { country: "英格兰", style: "年轻冲击力+定位球", starPlayers: ["凯恩", "贝林厄姆", "萨卡", "福登"], defaultFormation: "4-3-3" },
+            "Spain": { country: "西班牙", style: "极致传控，耐心渗透", starPlayers: ["佩德里", "加维", "莫拉塔", "罗德里"], defaultFormation: "4-3-3" },
+            "Netherlands": { country: "荷兰", style: "全攻全守，三中卫体系", starPlayers: ["德容", "德里赫特", "加克波", "西蒙斯"], defaultFormation: "3-5-2" },
+            "Portugal": { country: "葡萄牙", style: "技术流边路进攻", starPlayers: ["B席", "莱奥", "菲利克斯", "鲁本·迪亚斯"], defaultFormation: "4-3-3" },
+            "Belgium": { country: "比利时", style: "中场创造力，经验丰富", starPlayers: ["德布劳内", "卢卡库", "库尔图瓦", "特罗萨德"], defaultFormation: "4-3-3" },
+            "USA": { country: "美国", style: "运动能力+快速转换", starPlayers: ["普利西奇", "麦肯尼", "雷纳", "巴洛贡"], defaultFormation: "4-3-3" },
+            "Mexico": { country: "墨西哥", style: "小快灵，反击犀利", starPlayers: ["洛萨诺", "希门尼斯", "阿尔瓦雷斯", "奥乔亚"], defaultFormation: "4-3-3" },
+            "Japan": { country: "日本", style: "团队纪律，技术细腻", starPlayers: ["久保建英", "三笘薰", "远藤航", "富安健洋"], defaultFormation: "4-2-3-1" }
+        };
+        
+        const teamKeys = Object.keys(teamsData);
+        // 阵型列表
+        const formationsList = ["4-4-2", "4-3-3", "3-5-2", "5-3-2", "4-2-3-1", "3-4-3"];
+        // 战术指令库
+        const tacticsList = ["高位压迫", "防守反击", "传控为主", "快速进攻", "长传冲吊", "稳固防守"];
+        
+        // 全局状态
+        let currentHomeTeam = "Brazil";
+        let currentAwayTeam = "France";
+        let currentFormation = "4-3-3";
+        let selectedTactics = [];   // 最多3个
+        let currentHomeStar = "";
+        let currentAwayStar = "";
+        let isLoading = false;
+        
+        // DOM 元素
+        const homeSelect = document.getElementById('homeTeamSelect');
+        const awaySelect = document.getElementById('awayTeamSelect');
+        const homeStarSelect = document.getElementById('homeStarSelect');
+        const awayStarSelect = document.getElementById('awayStarSelect');
+        const formationGroup = document.getElementById('formationGroup');
+        const tacticsGroup = document.getElementById('tacticsGroup');
+        const simulateBtn = document.getElementById('simulateBtn');
+        const resultContent = document.getElementById('resultContent');
+        const shareBtn = document.getElementById('shareBtn');
+        const tacticWarning = document.getElementById('tacticWarning');
+        
+        // ----------------------------- 2. 初始化下拉菜单 -----------------------------
+        function initTeamSelectors() {
+            let homeOpts = '', awayOpts = '';
+            teamKeys.forEach(key => {
+                const tName = teamsData[key].country;
+                homeOpts += `<option value="${key}" ${key === currentHomeTeam ? 'selected' : ''}>${tName}</option>`;
+                awayOpts += `<option value="${key}" ${key === currentAwayTeam ? 'selected' : ''}>${tName}</option>`;
+            });
+            homeSelect.innerHTML = homeOpts;
+            awaySelect.innerHTML = awayOpts;
+        }
+        
+        // 根据队伍更新对应的球星下拉框
+        function updateStarPlayers(teamKey, isHome) {
+            const team = teamsData[teamKey];
+            if (!team) return;
+            const stars = team.starPlayers;
+            let options = '<option value="">-- 选择核心球员 --</option>';
+            stars.forEach(star => {
+                options += `<option value="${star}">${star}</option>`;
+            });
+            if (isHome) {
+                homeStarSelect.innerHTML = options;
+                if(currentHomeStar && stars.includes(currentHomeStar)) homeStarSelect.value = currentHomeStar;
+                else currentHomeStar = stars[0] || "";
+                if(!homeStarSelect.value && stars.length) homeStarSelect.value = stars[0];
+            } else {
+                awayStarSelect.innerHTML = options;
+                if(currentAwayStar && stars.includes(currentAwayStar)) awayStarSelect.value = currentAwayStar;
+                else currentAwayStar = stars[0] || "";
+                if(!awayStarSelect.value && stars.length) awayStarSelect.value = stars[0];
+            }
+        }
+        
+        // 监听主队客队变化
+        homeSelect.addEventListener('change', (e) => {
+            currentHomeTeam = e.target.value;
+            updateStarPlayers(currentHomeTeam, true);
+        });
+        awaySelect.addEventListener('change', (e) => {
+            currentAwayTeam = e.target.value;
+            updateStarPlayers(currentAwayTeam, false);
+        });
+        homeStarSelect.addEventListener('change', (e) => { currentHomeStar = e.target.value; });
+        awayStarSelect.addEventListener('change', (e) => { currentAwayStar = e.target.value; });
+        
+        // ----------------------------- 3. 阵型按钮渲染 + 交互 -----------------------------
+        function renderFormations() {
+            formationGroup.innerHTML = '';
+            formationsList.forEach(formation => {
+                const btn = document.createElement('button');
+                btn.textContent = formation;
+                btn.className = `px-4 py-2 rounded-xl border border-slate-600 bg-slate-800 hover:bg-slate-700 transition-smooth text-sm font-medium ${currentFormation === formation ? 'formation-btn active' : ''}`;
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('#formationGroup button').forEach(b => b.classList.remove('formation-btn', 'active'));
+                    btn.classList.add('formation-btn', 'active');
+                    currentFormation = formation;
+                });
+                formationGroup.appendChild(btn);
+            });
+        }
+        
+        // 战术指令多选 (最多3)
+        function renderTactics() {
+            tacticsGroup.innerHTML = '';
+            selectedTactics = [];  // 重置
+            tacticsList.forEach(tactic => {
+                const btn = document.createElement('button');
+                btn.textContent = tactic;
+                btn.className = `px-4 py-2 rounded-xl border border-slate-600 bg-slate-800 hover:bg-slate-700 transition-smooth text-sm`;
+                btn.addEventListener('click', () => {
+                    if(btn.classList.contains('tactic-btn')) {
+                        // 取消选中
+                        btn.classList.remove('tactic-btn', 'active');
+                        selectedTactics = selectedTactics.filter(t => t !== tactic);
+                        btn.style.backgroundColor = '';
+                    } else {
+                        if(selectedTactics.length >= 3) {
+                            tacticWarning.classList.remove('hidden');
+                            setTimeout(() => tacticWarning.classList.add('hidden'), 2000);
+                            return;
+                        }
+                        btn.classList.add('tactic-btn', 'active');
+                        btn.style.backgroundColor = '#1e3a8a';
+                        selectedTactics.push(tactic);
+                        tacticWarning.classList.add('hidden');
+                    }
+                });
+                tacticsGroup.appendChild(btn);
+            });
+        }
+        
+        // ----------------------------- 4. AI 模拟调用 (MVP 先使用智能模拟, 但完全模拟真实战术风格 + 注释对接真实API) -----------------------------
+        // 真实OpenAI/DeepSeek 接入指南: 
+        // 1. 替换下方函数体, 使用 fetch 调用 https://api.openai.com/v1/chat/completions 并附带API_KEY
+        // 2. 注意 CORS 问题, 建议通过后端代理. 本示例为了即开即用, 实现一个基于球队风格和战术的智能模拟引擎, 保证分析合理且有足球逻辑.
+        // 注意: 永远不会涉及赌博/必中词语.
+        async function callTacticalSimulation(home, away, formation, tactics, homeStar, awayStar) {
+            // 模拟网络延迟
+            await new Promise(resolve => setTimeout(resolve, 1200));
+            
+            const homeData = teamsData[home];
+            const awayData = teamsData[away];
+            if(!homeData || !awayData) throw new Error("球队数据缺失");
+            
+            // 战术风格影响因子 (模拟)
+            const tacticImpact = {
+                "高位压迫": { pressure: 0.8, counterRisk: 0.3 },
+                "防守反击": { defense: 0.7, fastBreak: 0.6 },
+                "传控为主": { possession: 0.9, patience: 0.7 },
+                "快速进攻": { speed: 0.85, direct: 0.7 },
+                "长传冲吊": { longball: 0.7, physical: 0.5 },
+                "稳固防守": { defense: 0.85, slow: 0.4 }
+            };
+            let homeBonus = 0, awayBonus = 0;
+            let possessionBase = 50;
+            // 基础风格偏移: 传控队 vs 反击队
+            if(homeData.style.includes("传控")) possessionBase += 8;
+            if(awayData.style.includes("反击")) possessionBase -= 5;
+            if(awayData.style.includes("传控")) possessionBase -= 6;
+            if(homeData.style.includes("压迫")) possessionBase += 3;
+            
+            // 战术加成
+            let homeTacticDesc = "";
+            tactics.forEach(t => {
+                if(tacticImpact[t]) {
+                    if(t === "传控为主") possessionBase += 12;
+                    if(t === "快速进攻") possessionBase -= 2;
+                    if(t === "高位压迫") possessionBase += 5;
+                    homeTacticDesc += t + " ";
+                }
+            });
+            // 限制控球范围 35~70
+            let homePossession = Math.min(70, Math.max(35, possessionBase + (Math.random() * 8 - 4)));
+            let awayPossession = 100 - homePossession;
+            
+            // 生成比分概率 (基于实力 + 阵型风格简单权重)
+            const homeStrength = (homeData.style.includes("技术")?3:2) + (tactics.includes("快速进攻")?2:0);
+            const awayStrength = (awayData.style.includes("冲击")?2:1) + (tactics.includes("防守反击")?1:0);
+            let scores = [
+                {score: "1-1", prob: 20},{score: "2-1", prob: 18},{score: "1-0", prob: 15},
+                {score: "2-2", prob: 12},{score: "0-1", prob: 10}
+            ];
+            if(homeStrength > awayStrength) scores[0].prob = 22; // 微调
+            scores = scores.map(s => ({...s, prob: s.prob + Math.floor(Math.random()*6)-3}));
+            let total = scores.reduce((sum, s) => sum + s.prob, 0);
+            scores = scores.map(s => ({score: s.score, prob: Math.round(s.prob / total * 100)}));
+            scores = scores.slice(0,5);
+            
+            // 战术分析 (基于场景)
+            let tacticalAnalysis = `基于${homeData.country}${homeData.style}风格，搭配${formation}阵型与${tactics.join("、")||"常规"}战术。`;
+            if(tactics.includes("高位压迫") && awayData.style.includes("传控")) tacticalAnalysis += ` 高位压迫将有效限制${awayData.country}后场出球，但需注意身后空档。`;
+            else if(tactics.includes("防守反击") && awayData.style.includes("压迫")) tacticalAnalysis += ` 防守反击克制对手高位防线，姆巴佩/维尼修斯等快马是关键。`;
+            else tacticalAnalysis += ` 中场控制将是胜负手，${formation}阵型与${awayData.country}的${awayData.style}形成有趣博弈。`;
+            
+            // 核心球员预测
+            let playerHomePred = `${homeStar || "核心球员"} 在战术体系中预期获得 ${Math.floor(Math.random()*3)+1} 次射门机会，关键传球有望改变战局。`;
+            let playerAwayPred = `${awayStar || "核心球员"} 需应对针对性防守，其速度/技术将决定反击效率。`;
+            // 战术建议
+            let tacticalSuggestion = `建议增强${homePossession>awayPossession?"控球稳定性":"反击效率"}，若增加边路宽度可制造更多传中。`;
+            
+            return {
+                scoreProbabilities: scores,
+                possessionHome: Math.round(homePossession),
+                possessionAway: Math.round(awayPossession),
+                tacticalAnalysis: tacticalAnalysis,
+                playerPredictionHome: playerHomePred,
+                playerPredictionAway: playerAwayPred,
+                tacticalSuggestion: tacticalSuggestion
+            };
+        }
+        
+        // 真实 OpenAI / DeepSeek 替换模板 (已注释，防止key暴露)
+        /*
+        async function callRealLLM(userPrompt) {
+            const API_KEY = "YOUR_API_KEY";  // 建议后端代理
+            const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${API_KEY}` },
+                body: JSON.stringify({
+                    model: "deepseek-chat",
+                    messages: [{ role: "system", content: "你是战术分析师..." }, { role: "user", content: userPrompt }],
+                    temperature: 0.7
+                })
+            });
+            const data = await response.json();
+            return JSON.parse(data.choices[0].message.content);
+        }
+        */
+        
+        // ----------------------------- 5. 渲染结果UI -----------------------------
+        function renderResult(data) {
+            // 比分概率条形图展示
+            let probHtml = `<div class="mb-4"><h4 class="font-semibold text-white mb-2">🎲 比分概率模拟</h4><div class="space-y-2">`;
+            data.scoreProbabilities.forEach(item => {
+                probHtml += `<div class="flex items-center gap-2 text-sm"><span class="w-12">${item.score}</span><div class="flex-1 bg-slate-700 rounded-full h-2 overflow-hidden"><div class="bg-blue-500 h-full rounded-full" style="width: ${item.prob}%"></div></div><span class="w-10 text-right">${item.prob}%</span></div>`;
+            });
+            probHtml += `</div></div>`;
+            
+            const possessionHtml = `<div class="mb-4"><h4 class="font-semibold text-white mb-2">⚡ 控球率预估</h4><div class="flex items-center gap-3"><div class="flex-1"><div class="flex justify-between text-xs"><span>${teamsData[currentHomeTeam]?.country || "主队"}</span><span>${data.possessionHome}%</span></div><div class="w-full bg-slate-700 rounded-full h-3"><div class="bg-blue-500 h-3 rounded-full" style="width: ${data.possessionHome}%"></div></div></div><div class="flex-1"><div class="flex justify-between text-xs"><span>${teamsData[currentAwayTeam]?.country || "客队"}</span><span>${data.possessionAway}%</span></div><div class="w-full bg-slate-700 rounded-full h-3"><div class="bg-emerald-500 h-3 rounded-full" style="width: ${data.possessionAway}%"></div></div></div></div></div>`;
+            
+            const textAnalysis = `<div class="bg-slate-800/50 p-3 rounded-xl mb-3"><span class="font-semibold text-blue-300">📋 战术分析</span><p class="text-gray-200 text-sm mt-1">${data.tacticalAnalysis}</p></div>
+            <div class="grid md:grid-cols-2 gap-3 mb-3"><div class="bg-slate-800/40 p-3 rounded-xl"><span class="font-semibold text-yellow-300">⭐ ${teamsData[currentHomeTeam]?.country} · ${currentHomeStar || "核心"}</span><p class="text-sm mt-1">${data.playerPredictionHome}</p></div>
+            <div class="bg-slate-800/40 p-3 rounded-xl"><span class="font-semibold text-yellow-300">⭐ ${teamsData[currentAwayTeam]?.country} · ${currentAwayStar || "核心"}</span><p class="text-sm mt-1">${data.playerPredictionAway}</p></div></div>
+            <div class="bg-indigo-950/40 p-3 rounded-xl border-l-4 border-indigo-400"><span class="font-semibold text-indigo-300">💡 战术建议</span><p class="text-sm mt-1">${data.tacticalSuggestion}</p></div>`;
+            
+            resultContent.innerHTML = `<div id="captureArea" class="space-y-4">${probHtml}${possessionHtml}${textAnalysis}</div>`;
+        }
+        
+        function showLoading(show) {
+            isLoading = show;
+            if(show) {
+                simulateBtn.disabled = true;
+                simulateBtn.innerHTML = `<div class="loading-spinner w-5 h-5 border-2 border-white border-t-transparent"></div> AI 深度推演中...`;
+                resultContent.innerHTML = `<div class="flex flex-col items-center justify-center py-12"><div class="loading-spinner"></div><p class="mt-4 text-gray-400">AI战术分析师正在计算阵型博弈...</p></div>`;
+            } else {
+                simulateBtn.disabled = false;
+                simulateBtn.innerHTML = `🧠 开始战术推演`;
+            }
+        }
+        
+        // 主推演函数
+        async function runSimulation() {
+            if(isLoading) return;
+            // 检查球队是否相同
+            if(currentHomeTeam === currentAwayTeam) {
+                alert("主队与客队不能相同，请选择不同队伍");
+                return;
+            }
+            // 确保有球星默认值
+            if(!currentHomeStar) {
+                const homeTeamStars = teamsData[currentHomeTeam]?.starPlayers;
+                if(homeTeamStars && homeTeamStars.length) currentHomeStar = homeTeamStars[0];
+                updateStarPlayers(currentHomeTeam, true);
+            }
+            if(!currentAwayStar) {
+                const awayTeamStars = teamsData[currentAwayTeam]?.starPlayers;
+                if(awayTeamStars && awayTeamStars.length) currentAwayStar = awayTeamStars[0];
+                updateStarPlayers(currentAwayTeam, false);
+            }
+            showLoading(true);
+            try {
+                // 调用模拟引擎（可更换真实API)
+                const result = await callTacticalSimulation(
+                    currentHomeTeam, currentAwayTeam, currentFormation, selectedTactics,
+                    currentHomeStar || teamsData[currentHomeTeam].starPlayers[0],
+                    currentAwayStar || teamsData[currentAwayTeam].starPlayers[0]
+                );
+                renderResult(result);
+            } catch(err) {
+                console.error(err);
+                resultContent.innerHTML = `<div class="text-center text-red-400 p-5">推演失败，请重试 ${err.message}</div>`;
+            } finally {
+                showLoading(false);
+            }
+        }
+        
+        // 截图分享功能
+        async function captureAndDownload() {
+            const captureElement = document.getElementById('captureArea');
+            if(!captureElement || captureElement.children.length === 0) {
+                alert("暂无推演结果，请先进行一次战术推演");
+                return;
+            }
+            try {
+                const canvas = await html2canvas(captureElement, {
+                    scale: 2,
+                    backgroundColor: '#0f172a',
+                    logging: false
+                });
+                const link = document.createElement('a');
+                link.download = `Tactician_${teamsData[currentHomeTeam]?.country}_vs_${teamsData[currentAwayTeam]?.country}.png`;
+                link.href = canvas.toDataURL();
+                link.click();
+            } catch(e) {
+                alert("截图生成失败: "+e.message);
+            }
+        }
+        
+        // 监听推演按钮和分享按钮
+        simulateBtn.addEventListener('click', runSimulation);
+        shareBtn.addEventListener('click', captureAndDownload);
+        
+        // 页面初始化
+        function init() {
+            initTeamSelectors();
+            updateStarPlayers(currentHomeTeam, true);
+            updateStarPlayers(currentAwayTeam, false);
+            renderFormations();
+            renderTactics();
+            // 默认把当前球星记录
+            currentHomeStar = teamsData[currentHomeTeam].starPlayers[0];
+            currentAwayStar = teamsData[currentAwayTeam].starPlayers[0];
+            homeStarSelect.value = currentHomeStar;
+            awayStarSelect.value = currentAwayStar;
+        }
+        init();
+    </script>
+</body>
+</html>
