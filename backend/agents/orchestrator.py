@@ -1,86 +1,79 @@
-# backend/agents/orchestrator.py
-from .team_agent import TeamAgent
-import logging
+# agents/orchestrator.py
+from agents.team_agent import TeamAgent
+from agents.utils.qwen_client import QwenClient
+import json
 
-logging.basicConfig(level=logging.INFO)
-
-class Orchestrator:
+class MatchOrchestrator:
     """
-    多轮博弈协调器，用于模拟两支国家队比赛。
+    多轮球队博弈协调器
     """
 
-    def __init__(self, rounds: int = 5):
-        self.rounds = rounds
+    def __init__(self):
+        self.home_agent = TeamAgent()
+        self.away_agent = TeamAgent()
+        self.final_client = QwenClient()  # 用于生成最终报告
 
-    def simulate(self, home_team: dict, away_team: dict, formation_home: str, formation_away: str,
-                 tactics_home: list, tactics_away: list, focus_players: dict) -> dict:
-        """
-        home_team, away_team: 球队完整信息字典
-        formation_home/away: 阵型
-        tactics_home/away: 战术列表
-        focus_players: {"home":"核心球员","away":"核心球员"}
-        """
-
-        home_agent = TeamAgent()
-        away_agent = TeamAgent()
-
-        total_home_score = 0
-        total_away_score = 0
-        total_home_possession = 50
+    def run_match(self, home_team: dict, away_team: dict, rounds: int = 3):
         history = []
 
-        for r in range(1, self.rounds + 1):
-            logging.info(f"=== 第 {r} 轮比赛 ===")
+        home_msg = None
+        away_msg = None
 
-            home_context = {
-                "my_team": home_team,
-                "opponent_team": away_team,
-                "formation": formation_home,
-                "tactics": tactics_home,
-                "focus_player": focus_players.get("home"),
-                "opponent_focus_player": focus_players.get("away"),
-                "round": r
-            }
-            home_resp = home_agent.act(home_context)
+        for round_no in range(1, rounds + 1):
+            # Home 发起
+            home_msg = self.home_agent.analyze_team(
+                home_team,
+                away_team,
+                round_no,
+                previous_message=away_msg
+            )
+            history.append(home_msg)
 
-            away_context = {
-                "my_team": away_team,
-                "opponent_team": home_team,
-                "formation": formation_away,
-                "tactics": tactics_away,
-                "focus_player": focus_players.get("away"),
-                "opponent_focus_player": focus_players.get("home"),
-                "round": r
-            }
-            away_resp = away_agent.act(away_context)
+            # Away 回复
+            away_msg = self.away_agent.analyze_team(
+                away_team,
+                home_team,
+                round_no,
+                previous_message=home_msg
+            )
+            history.append(away_msg)
 
-            # 更新比分和控球率
-            total_home_score += home_resp.get("score_change", {}).get("home",0)
-            total_away_score += away_resp.get("score_change", {}).get("away",0)
+        # 最终汇总
+        report = self.build_final_report(home_team, away_team, history)
+        return report
 
-            total_home_possession += home_resp.get("possession_change",0) - away_resp.get("possession_change",0)
-            total_home_possession = max(0, min(100, total_home_possession))
-            total_away_possession = 100 - total_home_possession
+    def build_final_report(self, home_team, away_team, history):
+        """
+        生成最终推演结果
+        """
+        prompt = f"""
+根据以下球队博弈历史，生成最终比赛预测报告。
+禁止讨论赌博。
+禁止出现“必赢”“稳赢”等表述。
+输出严格 JSON。
 
-            history.append({
-                "round": r,
-                "home_action": home_resp,
-                "away_action": away_resp
-            })
+主队：{json.dumps(home_team, ensure_ascii=False)}
+客队：{json.dumps(away_team, ensure_ascii=False)}
 
-        final_result = {
-            "score_probabilities":[
-                {"score": f"{total_home_score}:{total_away_score}", "prob":100}
-            ],
-            "possession":{
-                "home": total_home_possession,
-                "away": total_away_possession
-            },
-            "tactical_analysis":"基于多轮博弈生成战术分析",
-            "key_players": focus_players,
-            "tactical_advice":"综合战术建议",
-            "disclaimer":"本推演为 AI 模型基于历史数据模拟生成，仅供战术娱乐与学习参考，不代表实际比赛结果。",
-            "history": history
-        }
+博弈记录：
+{json.dumps(history, ensure_ascii=False)}
 
-        return final_result
+请返回：
+{{
+  "score_probability":[
+    {{"score":"1-0","probability":24}},
+    {{"score":"2-1","probability":21}},
+    {{"score":"1-1","probability":19}}
+  ],
+  "possession":{{
+    "{home_team['name']}": 52,
+    "{away_team['name']}": 48
+  }},
+  "key_battles":["示例：Mbappe vs Walker"],
+  "analysis":"战术分析示例...",
+  "recommendation":"战术建议示例...",
+  "disclaimer":"本推演为 AI 模型基于历史数据模拟生成，仅供战术娱乐与学习参考，不代表实际比赛结果。"
+}}
+"""
+        client = QwenClient()
+        return client.send(prompt)

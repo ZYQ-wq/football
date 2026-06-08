@@ -1,29 +1,23 @@
-from utils.qwen_client import QwenClient
+# agents/base_agent.py
+import os
 import json
-import logging
-
-logging.basicConfig(level=logging.INFO)
+from .utils.qwen_client import QwenClient
 
 class BaseAgent:
-    """
-    智能体基类，封装通义千问 API 调用
-    """
-    def __init__(self, role_name: str):
-        self.role_name = role_name
-        self.client = QwenClient()
-    
-    def generate_response(self, prompt: str) -> dict:
-        """
-        调用通义千问 API 获取结构化 JSON 响应
-        返回字典类型
-        """
-        logging.info(f"[{self.role_name}] 发送 Prompt: {prompt}")
+    """封装通义千问 API 调用"""
+
+    def __init__(self):
+        api_key = os.getenv("QWEN_API_KEY", "")
+        if not api_key:
+            raise ValueError("请在环境变量中设置 QWEN_API_KEY")
+        self.client = QwenClient(api_key)
+
+    def chat(self, prompt: str):
+        """发送 Prompt 给 LLM，并返回 JSON"""
+        response = self.client.send(prompt)
         try:
-            response_text = self.client.chat(prompt)
-            logging.info(f"[{self.role_name}] 返回原始文本: {response_text}")
-            # 尝试解析为 JSON
-            response_json = json.loads(response_text)
-            return response_json
+            # 尝试解析 JSON
+            return json.loads(response)
         except json.JSONDecodeError:
-            logging.error(f"[{self.role_name}] JSON解析失败，返回原始文本")
-            return {"raw_text": response_text}
+            # 如果失败，直接返回原文
+            return response
